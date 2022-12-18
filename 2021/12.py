@@ -1,118 +1,140 @@
-class Octopus:
-    def __init__(self, energyLevel):
-        self.hasFlashed = False
-        self.energyLevel = energyLevel
+from enum import StrEnum
+
+
+class Node:
+    def __init__(self, id):
+        self.id = id
+        self.connections = []
+        self.BigCave = id.isupper()
+    def __hash__(self):
+        return hash(self.id)
 
     def __repr__(self):
-        return str(self.energyLevel)
+        strStart = f"{self.id}"
+        #strStart += "+->" + ",".join([x.id for x in self.connections])
+        return str(strStart)
+
+    def __eq__(self, other):
+        if not isinstance(other, Node):
+            # don't attempt to compare against unrelated types
+            return NotImplemented
+        return self.id == other.id
+
+    def isEnd(self):
+        return self.id == "end"
 
 
-class Board:
+class Map:
     def __init__(self):
-        self.grid = []
-        self.flashCounter = []
+        self.listOfNodes = []
+        self.start = None
+        self.end = None
 
-    def checkAllFlashed(self):
-        for y in range(len(self.grid)):
-            for x in range(len(self.grid[y])):
-                if not self.grid[y][x].hasFlashed:
-                    return False
-        return True
+    def setUp(self):
+        self.start = [x for x in self.listOfNodes if x.id == "start"][0]
+        self.end = [x for x in self.listOfNodes if x.id == "end"][0]
 
-    def runSimulation(self, steps):
-        #self.printBoard(0)
-        for i in range(steps):
-            flashList = self.increaseEnergy()
-            self.simulateFlashes(i, flashList)
-            self.resetEnergy()
-            #self.printBoard(i + 1)
+    def buildPath(self, visitedNodes: Node, currentNode: Node) -> list:
+        if len(visitedNodes) > 0 and currentNode == self.start:
+            return None
+        if currentNode in visitedNodes and not currentNode.BigCave:
+            return None
+        if currentNode == self.end:
+            return [currentNode]
+        visitedNodes = visitedNodes.copy()
+        visitedNodes.append(currentNode)
+        listOfPaths = []
 
-    def runSimulationContinously(self):
-        count = 0
-        while True:
-            flashList = self.increaseEnergy()
-            self.simulateFlashes(count, flashList)
-            if self.checkAllFlashed():
-                return count
-            self.resetEnergy()
-            count += 1
-    def printBoard(self, step):
-        print(f"After Step {step}:")
-        if(step > 0):
-            print(f"Flash counter {self.flashCounter[step - 1]}")
-        for y in range(len(self.grid)):
-            print(" ".join(str(x.energyLevel) for x in self.grid[y]))
+        for node in currentNode.connections:
+            results = self.buildPath(visitedNodes, node)
+            if results:
+                for result in results:
+                    if isinstance(result,list):
+                        newList = [currentNode]
+                        newList.extend(result)
+                        listOfPaths.append(newList)
+                    else:
+                        listOfPaths.append([currentNode, result])
+        return listOfPaths
 
-    def increaseEnergy(self):
-        flashList = []
-        for y in range(len(self.grid)):
-            for x in range(len(self.grid[y])):
-                self.grid[y][x].energyLevel += 1
-                if self.grid[y][x].energyLevel > 9:
-                    self.grid[y][x].hasFlashed = True
-                    flashList.append((x, y))
-        return flashList
+    def buildPath2(self, visitedNodes: Node, currentNode: Node, jokerUsed: bool) -> list:
 
-    def simulateFlashes(self, step, flashList):
-        self.flashCounter.append(0)
-        while flashList:
-            newFlashList = []
-            for flash in flashList:
-                self.flashCounter[step] += 1
-                for dx in [-1, 0, 1]:
-                    for dy in [-1, 0, 1]:
-                        newX = flash[0] + dx
-                        newY = flash[1] + dy
-                        if dx == 0 and dy == 0:
-                            continue
-                        if 0 <= newX < len(self.grid[0]) and 0 <= newY < len(self.grid):
-                            self.grid[newY][newX].energyLevel += 1
-                            if self.grid[newY][newX].energyLevel > 9 and not self.grid[newY][newX].hasFlashed:
-                                self.grid[newY][newX].hasFlashed = True
-                                newFlashList.append((newX, newY))
-            flashList = newFlashList
+        #localJokerUser = jokerUsed.copy()
+        if len(visitedNodes) > 0 and currentNode == self.start:
+            return None
+        if currentNode in visitedNodes and not currentNode.BigCave and jokerUsed:
+            return None
+        if currentNode == self.end:
+            return [currentNode]
 
-    def resetEnergy(self):
-        for y in range(len(self.grid)):
-            for x in range(len(self.grid[y])):
-                if self.grid[y][x].hasFlashed:
-                    self.grid[y][x].energyLevel = 0
-                    self.grid[y][x].hasFlashed = False
+        tempBool = not jokerUsed and currentNode in visitedNodes and not currentNode.BigCave
 
+        visitedNodes = visitedNodes.copy()
+        visitedNodes.append(currentNode)
+        listOfPaths = []
+        for node in currentNode.connections:
+            if tempBool:
+                results = self.buildPath2(visitedNodes, node, True)
+            else:
 
+                results = self.buildPath2(visitedNodes, node, jokerUsed)
+            if results:
+                for result in results:
+                    if isinstance(result,list):
+                        newList = [currentNode]
+                        newList.extend(result)
+                        listOfPaths.append(newList)
+                    else:
+                        listOfPaths.append([currentNode, result])
+        return listOfPaths
+
+    def printPaths(self, test):
+        print("\n".join([",".join([y.id for y in x]) for x in test]) + "\n")
 def task1():
-    board = Board()
-    steps = 100
-    with open("11.txt") as f:
+    board = Map()
+    with open("12.txt") as f:
         for num, line in enumerate(f):
-            board.grid.append([])
-            line = line.strip()
-            for char in line:
-                board.grid[num].append(Octopus(int(char)))
+            nodes = line.strip().split("-")
+            for numb, node in enumerate(nodes):
+                nodeObject = Node(node)
+                if nodeObject not in board.listOfNodes:
+                    nodes[numb] = nodeObject
+                    board.listOfNodes.append(nodeObject)
+                else:
+                    nodes[numb] = [n for n in board.listOfNodes if n == nodeObject][0]
+            for node in nodes:
+                otherNode = [n for n in nodes if n != node][0]
+                node.connections.append(otherNode)
+                node.connections = list(dict.fromkeys(node.connections))
 
-    board.runSimulation(steps)
-    sumFlashes = 0
-    for flash in board.flashCounter:
-        sumFlashes += flash
+    board.setUp()
+    test = board.buildPath([], board.start)
 
-    print(f" Task 1 | Steps: {steps}, Number of Flashes: {sumFlashes}")
+    print(f" Task 1 | Paths: {len(test)}")
 
 
 def task2():
-    board = Board()
-    with open("11.txt") as f:
+    board = Map()
+    with open("12.txt") as f:
         for num, line in enumerate(f):
-            board.grid.append([])
-            line = line.strip()
-            for char in line:
-                board.grid[num].append(Octopus(int(char)))
+            nodes = line.strip().split("-")
+            for numb, node in enumerate(nodes):
+                nodeObject = Node(node)
+                if nodeObject not in board.listOfNodes:
+                    nodes[numb] = nodeObject
+                    board.listOfNodes.append(nodeObject)
+                else:
+                    nodes[numb] = [n for n in board.listOfNodes if n == nodeObject][0]
+            for node in nodes:
+                otherNode = [n for n in nodes if n != node][0]
+                node.connections.append(otherNode)
+                node.connections = list(dict.fromkeys(node.connections))
 
-    allFlashedTurn = board.runSimulationContinously()
-    sumFlashes = 0
-    for flash in board.flashCounter:
-        sumFlashes += flash
+    board.setUp()
+    test = board.buildPath2([], board.start, False)
 
-    print(f" Task 1 | Steps: {allFlashedTurn + 1}, Number of Flashes: {sumFlashes}")
+    print(f" Task 2 | Paths: {len(test)}")
+
 
 
 task1()
